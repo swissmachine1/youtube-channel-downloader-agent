@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yt-summarize"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.84.0",
+    "click>=8.0",
+    "yt-dlp>=2024.1.1",
+    "youtube-transcript-api>=0.6.0",
+    "python-dotenv>=1.0.0",
+    "rich>=13.0",
+    "fastapi>=0.100",
+    "uvicorn>=0.23",
+]
+
+[project.scripts]
+yt-summarize = "yt_summarize.cli:cli"
+yt-summarize-web = "web.app:main"
+
+[tool.setuptools.packages.find]
+where = ["."]

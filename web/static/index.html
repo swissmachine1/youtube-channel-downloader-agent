@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>yt-summarize</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22253a;
+      --border: #2e3150;
+      --accent: #6c63ff;
+      --accent-hover: #8a83ff;
+      --red: #ff4f4f;
+      --green: #4caf7d;
+      --yellow: #f0ad4e;
+      --cyan: #4ec9f0;
+      --dim: #6b7280;
+      --text: #e2e4ef;
+      --text-dim: #9096ad;
+      --radius: 10px;
+      --font-mono: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---- Header ---- */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 28px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    header h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    header h1 span { color: var(--accent); }
+    #api-badge {
+      margin-left: auto;
+      font-size: 0.75rem;
+      padding: 3px 10px;
+      border-radius: 99px;
+      font-weight: 600;
+    }
+    #api-badge.ok { background: rgba(76,175,125,0.15); color: var(--green); border: 1px solid var(--green); }
+    #api-badge.err { background: rgba(255,79,79,0.15); color: var(--red); border: 1px solid var(--red); }
+
+    /* ---- Tabs ---- */
+    nav {
+      display: flex;
+      gap: 2px;
+      padding: 0 28px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    nav button {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      padding: 12px 18px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
+    nav button:hover:not(.active) { color: var(--text); }
+
+    /* ---- Main content ---- */
+    main {
+      flex: 1;
+      padding: 28px;
+      max-width: 1100px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ---- Cards ---- */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 18px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 0.78rem;
+    }
+
+    /* ---- Sub-tabs (Channel / Search) ---- */
+    .sub-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+    .sub-tab {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      padding: 7px 18px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      transition: background 0.15s, color 0.15s;
+    }
+    .sub-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* ---- Forms ---- */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .form-grid .full { grid-column: 1 / -1; }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+    }
+    label span { font-weight: 500; }
+
+    input[type="text"],
+    input[type="number"],
+    input[type="date"] {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 8px 12px;
+      font-size: 0.9rem;
+      width: 100%;
+      transition: border-color 0.15s;
+    }
+    input:focus { outline: none; border-color: var(--accent); }
+
+    /* ---- Buttons ---- */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 22px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-sm { padding: 5px 14px; font-size: 0.8rem; }
+    .btn-ghost { background: var(--surface2); border: 1px solid var(--border); color: var(--text); }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ---- Progress log ---- */
+    #log-panel { display: none; }
+    #log-panel.visible { display: block; }
+
+    .stats-bar {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .stat-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 4px 14px;
+      font-size: 0.82rem;
+    }
+    .stat-chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot-green { background: var(--green); }
+    .dot-cyan { background: var(--cyan); }
+    .dot-yellow { background: var(--yellow); }
+    .dot-red { background: var(--red); }
+    .dot-dim { background: var(--dim); }
+
+    #log-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      height: 280px;
+      overflow-y: auto;
+      line-height: 1.7;
+    }
+    .log-line { display: flex; gap: 10px; }
+    .log-time { color: var(--dim); flex-shrink: 0; }
+    .log-msg { color: var(--text); }
+    .log-msg.cached { color: var(--dim); }
+    .log-msg.transcript { color: var(--cyan); }
+    .log-msg.summarize { color: #c084fc; }
+    .log-msg.done { color: var(--green); }
+    .log-msg.skip { color: var(--yellow); }
+    .log-msg.error { color: var(--red); }
+    .log-msg.log { color: var(--text-dim); }
+
+    .progress-bar-wrap {
+      background: var(--surface2);
+      border-radius: 99px;
+      height: 6px;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #a855f7);
+      border-radius: 99px;
+      transition: width 0.4s ease;
+      width: 0%;
+    }
+
+    /* ---- History table ---- */
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    th {
+      text-align: left;
+      padding: 10px 14px;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-channel { background: rgba(108,99,255,0.2); color: var(--accent); }
+    .badge-search { background: rgba(76,201,240,0.2); color: var(--cyan); }
+
+    /* ---- Output files ---- */
+    .output-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    .file-list {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    .file-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.82rem;
+      transition: background 0.1s;
+    }
+    .file-item:last-child { border-bottom: none; }
+    .file-item:hover { background: var(--surface2); }
+    .file-item.active { background: rgba(108,99,255,0.15); color: var(--accent); }
+    .file-item .file-name { font-family: var(--font-mono); word-break: break-all; }
+    .file-item .file-meta { color: var(--dim); font-size: 0.75rem; margin-top: 2px; }
+
+    .file-viewer {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 24px;
+      min-height: 300px;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    .file-viewer-empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 300px;
+      color: var(--text-dim);
+      font-size: 0.9rem;
+    }
+
+    /* Markdown rendering */
+    .md-content { line-height: 1.7; }
+    .md-content h1 { font-size: 1.4rem; margin-bottom: 16px; }
+    .md-content h2 { font-size: 1.1rem; margin: 20px 0 10px; color: var(--accent); }
+    .md-content h3 { font-size: 0.95rem; margin: 16px 0 8px; }
+    .md-content p { margin-bottom: 12px; color: var(--text); }
+    .md-content table { width: 100%; margin-bottom: 16px; }
+    .md-content th, .md-content td { padding: 8px 12px; border: 1px solid var(--border); }
+    .md-content th { background: var(--surface2); }
+    .md-content code { font-family: var(--font-mono); background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
+    .md-content pre { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 14px; overflow-x: auto; margin-bottom: 14px; }
+    .md-content pre code { background: none; padding: 0; }
+    .md-content hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+    .md-content details { border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; margin-bottom: 14px; }
+    .md-content summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+    .md-content a { color: var(--accent); }
+    .md-content ul, .md-content ol { padding-left: 20px; margin-bottom: 12px; }
+    .md-content li { margin-bottom: 4px; }
+
+    /* ---- Misc ---- */
+    .empty-state {
+      text-align: center;
+      padding: 48px;
+      color: var(--text-dim);
+      font-size: 0.9rem;
+    }
+    .form-actions { margin-top: 18px; display: flex; gap: 10px; align-items: center; }
+    #run-status { font-size: 0.85rem; color: var(--text-dim); }
+    #run-status.success { color: var(--green); }
+    #run-status.error { color: var(--red); }
+  </style>
+</head>
+<body>
+
+<header>
+  <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+    <rect width="28" height="28" rx="7" fill="#6c63ff"/>
+    <path d="M10 9l10 5-10 5V9z" fill="white"/>
+  </svg>
+  <h1>yt<span>-summarize</span></h1>
+  <span id="api-badge">checking…</span>
+</header>
+
+<nav>
+  <button class="active" onclick="showTab('run', this)">Run</button>
+  <button onclick="showTab('history', this)">History</button>
+  <button onclick="showTab('output', this)">Output Files</button>
+</nav>
+
+<main>
+
+  <!-- ============ RUN TAB ============ -->
+  <div id="tab-run" class="tab-panel active">
+
+    <div class="card">
+      <h2>Mode</h2>
+      <div class="sub-tabs">
+        <button class="sub-tab active" onclick="showMode('channel', this)">📺 Channel</button>
+        <button class="sub-tab" onclick="showMode('search', this)">🔍 Search</button>
+      </div>
+
+      <!-- Channel form -->
+      <div id="mode-channel">
+        <div class="form-grid">
+          <label class="full">
+            <span>Channel URL</span>
+            <input type="text" id="ch-url" placeholder="https://youtube.com/@SomeChannel" />
+          </label>
+          <label>
+            <span>Max videos</span>
+            <input type="number" id="ch-max" value="20" min="1" max="200" />
+          </label>
+          <label>
+            <span>Workers</span>
+            <input type="number" id="ch-workers" value="5" min="1" max="20" />
+          </label>
+          <label>
+            <span>Since date (optional)</span>
+            <input type="date" id="ch-since" />
+          </label>
+          <label>
+            <span>Output directory</span>
+            <input type="text" id="ch-output" value="/tmp/yt-summarize/output" />
+          </label>
+          <label>
+            <span>Cache directory</span>
+            <input type="text" id="ch-cache" value="/tmp/yt-summarize/cache" />
+          </label>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="ch-btn" onclick="runChannel()">▶ Run</button>
+          <span id="run-status"></span>
+        </div>
+      </div>
+
+      <!-- Search form -->
+      <div id="mode-search" style="display:none">
+        <div class="form-grid">
+          <label class="full">
+            <span>Search query</span>
+            <input type="text" id="sr-query" placeholder="e.g. machine learning tutorial" />
+          </label>
+          <label>
+            <span>Max videos</span>
+            <input type="number" id="sr-max" value="10" min="1" max="100" />
+          </label>
+          <label>
+            <span>Workers</span>
+            <input type="number" id="sr-workers" value="5" min="1" max="20" />
+          </label>
+          <label>
+            <span>Output directory</span>
+            <input type="text" id="sr-output" value="/tmp/yt-summarize/output" />
+          </label>
+          <label>
+            <span>Cache directory</span>
+            <input type="text" id="sr-cache" value="/tmp/yt-summarize/cache" />
+          </label>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="sr-btn" onclick="runSearch()">▶ Run</button>
+          <span id="run-status-sr"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress panel -->
+    <div class="card" id="log-panel">
+      <h2>Progress</h2>
+
+      <div class="stats-bar" id="stats-bar">
+        <div class="stat-chip"><div class="dot dot-green"></div><span id="stat-done">0</span> done</div>
+        <div class="stat-chip"><div class="dot dot-cyan"></div><span id="stat-cached">0</span> cached</div>
+        <div class="stat-chip"><div class="dot dot-yellow"></div><span id="stat-skip">0</span> skipped</div>
+        <div class="stat-chip"><div class="dot dot-red"></div><span id="stat-err">0</span> errors</div>
+        <div class="stat-chip"><div class="dot dot-dim"></div><span id="stat-total">0</span> total</div>
+      </div>
+
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="progress-bar"></div>
+      </div>
+
+      <div id="log-box"></div>
+    </div>
+  </div>
+
+  <!-- ============ HISTORY TAB ============ -->
+  <div id="tab-history" class="tab-panel">
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+        <h2 style="margin:0">Run History</h2>
+        <button class="btn btn-ghost btn-sm" onclick="loadHistory()">↻ Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Type</th>
+              <th>Input</th>
+              <th>Found</th>
+              <th>New</th>
+              <th>Cached</th>
+              <th>Failed</th>
+              <th>Output dir</th>
+            </tr>
+          </thead>
+          <tbody id="history-body">
+            <tr><td colspan="8" class="empty-state">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ OUTPUT TAB ============ -->
+  <div id="tab-output" class="tab-panel">
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+        <h2 style="margin:0">Output Files</h2>
+        <button class="btn btn-ghost btn-sm" onclick="loadOutput()">↻ Refresh</button>
+      </div>
+      <div class="output-layout">
+        <div class="file-list" id="file-list">
+          <div class="empty-state">Loading…</div>
+        </div>
+        <div class="file-viewer" id="file-viewer">
+          <div class="file-viewer-empty">Select a file to view its content</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ---- Tab & mode navigation ----
+function showTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'history') loadHistory();
+  if (name === 'output') loadOutput();
+}
+
+function showMode(mode, btn) {
+  document.querySelectorAll('.sub-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('mode-channel').style.display = mode === 'channel' ? '' : 'none';
+  document.getElementById('mode-search').style.display = mode === 'search' ? '' : 'none';
+}
+
+// ---- API status ----
+async function checkStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    const badge = document.getElementById('api-badge');
+    if (d.api_key_set) {
+      badge.textContent = '✓ API key set';
+      badge.className = 'ok';
+    } else {
+      badge.textContent = '✗ No API key';
+      badge.className = 'err';
+    }
+  } catch { /* ignore */ }
+}
+
+// ---- Job state ----
+let currentJob = null;
+let done = 0, cached = 0, skip = 0, err = 0, total = 0;
+
+function resetStats() {
+  done = cached = skip = err = total = 0;
+  updateStats();
+  document.getElementById('progress-bar').style.width = '0%';
+  document.getElementById('log-box').innerHTML = '';
+}
+
+function updateStats() {
+  document.getElementById('stat-done').textContent = done;
+  document.getElementById('stat-cached').textContent = cached;
+  document.getElementById('stat-skip').textContent = skip;
+  document.getElementById('stat-err').textContent = err;
+  document.getElementById('stat-total').textContent = total;
+  if (total > 0) {
+    const pct = Math.round(((done + cached + skip + err) / total) * 100);
+    document.getElementById('progress-bar').style.width = pct + '%';
+  }
+}
+
+function logLine(msg, cls = 'log') {
+  const box = document.getElementById('log-box');
+  const now = new Date().toLocaleTimeString('en', { hour12: false });
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = `<span class="log-time">${now}</span><span class="log-msg ${cls}">${escHtml(msg)}</span>`;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ---- Stream processing ----
+function handleEvent(data) {
+  const e = JSON.parse(data);
+  switch (e.type) {
+    case 'log':
+      logLine(e.message, 'log');
+      break;
+    case 'found':
+      total = e.count;
+      updateStats();
+      logLine(e.message, 'log');
+      break;
+    case 'video':
+      logLine(e.message, e.state);
+      if (e.state === 'done') { done++; updateStats(); }
+      else if (e.state === 'cached') { cached++; updateStats(); }
+      else if (e.state === 'skip') { skip++; updateStats(); }
+      else if (e.state === 'error') { err++; updateStats(); }
+      break;
+    case 'error':
+      logLine('ERROR: ' + e.message, 'error');
+      break;
+    case 'ping':
+      break;
+    case 'end':
+      if (e.stats) {
+        done = e.stats.done || 0;
+        cached = e.stats.cached || 0;
+        skip = e.stats.skip || 0;
+        err = e.stats.error || 0;
+        updateStats();
+      }
+      const status = e.status === 'done' ? '✓ Completed' : '✗ Failed';
+      logLine(status, e.status === 'done' ? 'done' : 'error');
+      setRunning(false, e.status === 'done');
+      break;
+  }
+}
+
+function setRunning(isRunning, success = false) {
+  const chBtn = document.getElementById('ch-btn');
+  const srBtn = document.getElementById('sr-btn');
+  chBtn.disabled = isRunning;
+  srBtn.disabled = isRunning;
+  if (!isRunning) {
+    const statusEl = document.getElementById('run-status');
+    const statusSr = document.getElementById('run-status-sr');
+    const msg = success ? '✓ Done!' : '✗ Failed';
+    const cls = success ? 'success' : 'error';
+    statusEl.textContent = msg; statusEl.className = cls;
+    statusSr.textContent = msg; statusSr.className = cls;
+  } else {
+    document.getElementById('run-status').textContent = '● Running…';
+    document.getElementById('run-status').className = '';
+    document.getElementById('run-status-sr').textContent = '● Running…';
+    document.getElementById('run-status-sr').className = '';
+  }
+}
+
+async function startJob(endpoint, payload) {
+  resetStats();
+  document.getElementById('log-panel').classList.add('visible');
+  setRunning(true);
+
+  const r = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) {
+    logLine('Failed to start job: ' + r.statusText, 'error');
+    setRunning(false, false);
+    return;
+  }
+  const { job_id } = await r.json();
+  currentJob = job_id;
+
+  const es = new EventSource(`/api/jobs/${job_id}/stream`);
+  es.onmessage = e => handleEvent(e.data);
+  es.onerror = () => { es.close(); setRunning(false, false); };
+}
+
+async function runChannel() {
+  await startJob('/api/run/channel', {
+    url: document.getElementById('ch-url').value.trim(),
+    max_results: parseInt(document.getElementById('ch-max').value),
+    workers: parseInt(document.getElementById('ch-workers').value),
+    since: document.getElementById('ch-since').value || null,
+    output_dir: document.getElementById('ch-output').value.trim(),
+    cache_dir: document.getElementById('ch-cache').value.trim(),
+  });
+}
+
+async function runSearch() {
+  await startJob('/api/run/search', {
+    query: document.getElementById('sr-query').value.trim(),
+    max_results: parseInt(document.getElementById('sr-max').value),
+    workers: parseInt(document.getElementById('sr-workers').value),
+    output_dir: document.getElementById('sr-output').value.trim(),
+    cache_dir: document.getElementById('sr-cache').value.trim(),
+  });
+}
+
+// ---- History ----
+async function loadHistory() {
+  const tbody = document.getElementById('history-body');
+  tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Loading…</td></tr>';
+  try {
+    const r = await fetch('/api/history');
+    const records = await r.json();
+    if (!records.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No history yet.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = records.map(rec => {
+      const ts = rec.timestamp.slice(0, 16).replace('T', ' ');
+      const badge = rec.command === 'channel'
+        ? '<span class="badge badge-channel">channel</span>'
+        : '<span class="badge badge-search">search</span>';
+      return `<tr>
+        <td>${ts}</td>
+        <td>${badge}</td>
+        <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(rec.input)}">${escHtml(rec.input)}</td>
+        <td>${rec.videos_found}</td>
+        <td style="color:var(--green)">${rec.videos_processed}</td>
+        <td style="color:var(--dim)">${rec.videos_from_cache}</td>
+        <td style="color:var(--red)">${rec.videos_failed}</td>
+        <td style="color:var(--dim);font-size:0.78rem;font-family:var(--font-mono)">${escHtml(rec.output_dir)}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">Error: ${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+// ---- Output files ----
+let currentOutputDir = './output';
+
+async function loadOutput() {
+  const list = document.getElementById('file-list');
+  list.innerHTML = '<div class="empty-state">Loading…</div>';
+  try {
+    const r = await fetch('/api/output');
+    const files = await r.json();
+    if (!files.length) {
+      list.innerHTML = '<div class="empty-state">No output files yet.</div>';
+      return;
+    }
+    list.innerHTML = files.map(f => {
+      const kb = (f.size / 1024).toFixed(1);
+      const d = new Date(f.mtime * 1000).toLocaleDateString();
+      return `<div class="file-item" onclick="viewFile('${escHtml(f.name)}', this)">
+        <div class="file-name">${escHtml(f.name)}</div>
+        <div class="file-meta">${kb} KB · ${d}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div class="empty-state">Error: ${escHtml(e.message)}</div>`;
+  }
+}
+
+async function viewFile(name, el) {
+  document.querySelectorAll('.file-item').forEach(i => i.classList.remove('active'));
+  el.classList.add('active');
+
+  const viewer = document.getElementById('file-viewer');
+  viewer.innerHTML = '<div class="file-viewer-empty">Loading…</div>';
+
+  try {
+    const r = await fetch(`/api/output/${encodeURIComponent(name)}`);
+    const d = await r.json();
+    viewer.innerHTML = `<div class="md-content">${marked.parse(d.content)}</div>`;
+  } catch(e) {
+    viewer.innerHTML = `<div class="file-viewer-empty" style="color:var(--red)">Error: ${escHtml(e.message)}</div>`;
+  }
+}
+
+// ---- Init ----
+checkStatus();
+</script>
+
+</body>
+</html>

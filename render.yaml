@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: yt-summarize
+    runtime: python
+    buildCommand: pip install .
+    startCommand: yt-summarize-web
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false          # Set this manually in the Render dashboard
+      - key: OUTPUT_DIR
+        value: /tmp/yt-summarize/output
+      - key: CACHE_DIR
+        value: /tmp/yt-summarize/cache
