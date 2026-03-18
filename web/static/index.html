@@ -500,7 +500,10 @@
     <div class="card">
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
         <h2 style="margin:0">Output Files</h2>
-        <button class="btn btn-ghost btn-sm" onclick="loadOutput()">↻ Refresh</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-sm" id="download-btn" onclick="downloadCurrent()" disabled style="opacity:0.4">⬇ Download</button>
+          <button class="btn btn-ghost btn-sm" onclick="loadOutput()">↻ Refresh</button>
+        </div>
       </div>
       <div class="output-layout">
         <div class="file-list" id="file-list">
@@ -747,6 +750,8 @@ async function loadOutput() {
   }
 }
 
+let _currentFile = null;
+
 async function viewFile(name, el) {
   document.querySelectorAll('.file-item').forEach(i => i.classList.remove('active'));
   el.classList.add('active');
@@ -758,9 +763,23 @@ async function viewFile(name, el) {
     const r = await fetch(`/api/output/${encodeURIComponent(name)}`);
     const d = await r.json();
     viewer.innerHTML = `<div class="md-content">${marked.parse(d.content)}</div>`;
+    _currentFile = { name: d.name, content: d.content };
+    const btn = document.getElementById('download-btn');
+    btn.disabled = false;
+    btn.style.opacity = '1';
   } catch(e) {
     viewer.innerHTML = `<div class="file-viewer-empty" style="color:var(--red)">Error: ${escHtml(e.message)}</div>`;
   }
+}
+
+function downloadCurrent() {
+  if (!_currentFile) return;
+  const blob = new Blob([_currentFile.content], { type: 'text/markdown' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = _currentFile.name;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 // ---- Init ----
