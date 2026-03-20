@@ -11,3 +11,5 @@ services:
         value: /tmp/yt-summarize/output
       - key: CACHE_DIR
         value: /tmp/yt-summarize/cache
+      - key: PYTHON_VERSION
+        value: "3.11.0"
