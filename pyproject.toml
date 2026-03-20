@@ -23,3 +23,6 @@ yt-summarize-web = "web.app:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[tool.setuptools.package-data]
+"web" = ["static/*"]
