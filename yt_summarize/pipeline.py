@@ -31,6 +31,7 @@ def _process_one(
     overall_task,
     claude_sem: Semaphore,
     on_event: Callable[[dict], None] | None = None,
+    api_key: str | None = None,
 ) -> tuple[CachedVideo | None, str]:
     """
     Process a single video end-to-end.
@@ -82,7 +83,7 @@ def _process_one(
     try:
         transcript_text = transcript_module.segments_to_text(cached.transcript)
         with claude_sem:
-            summary = summarizer_module.summarize_video(meta.title, transcript_text)
+            summary = summarizer_module.summarize_video(meta.title, transcript_text, api_key)
         cached.summary = summary
     except Exception as e:
         progress.console.print(f"  [red][error][/red] {label}: {e}")
@@ -104,6 +105,7 @@ def process_batch(
     cache_dir: Path,
     workers: int = 5,
     on_event: Callable[[dict], None] | None = None,
+    api_key: str | None = None,
 ) -> tuple[list[CachedVideo], dict[str, int]]:
     """
     Process a batch of videos concurrently.
@@ -129,7 +131,7 @@ def process_batch(
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {
                 executor.submit(
-                    _process_one, meta, output_dir, cache_dir, progress, overall, claude_sem, on_event
+                    _process_one, meta, output_dir, cache_dir, progress, overall, claude_sem, on_event, api_key
                 ): meta
                 for meta in videos
             }
@@ -156,6 +158,7 @@ def generate_and_write_combined(
     processed: list[CachedVideo],
     output_dir: Path,
     on_event: Callable[[dict], None] | None = None,
+    api_key: str | None = None,
 ) -> None:
     """Generate and write the combined batch summary."""
     if not processed:
@@ -178,7 +181,7 @@ def generate_and_write_combined(
         console=_console,
     ):
         try:
-            combined = summarizer_module.generate_combined_summary(video_summaries)
+            combined = summarizer_module.generate_combined_summary(video_summaries, api_key)
         except Exception as e:
             _console.print(f"[red][combined error][/red] {e}")
             if on_event:

@@ -50,7 +50,7 @@ def _finish_job(job_id: str, stats: dict | None = None, error: str | None = None
 # Background workers
 # ---------------------------------------------------------------------------
 
-def _run_channel(job_id: str, url: str, max_results: int, output_dir: str, cache_dir: str, workers: int, since: str | None) -> None:
+def _run_channel(job_id: str, url: str, max_results: int, output_dir: str, cache_dir: str, workers: int, since: str | None, api_key: str = "") -> None:
     from yt_summarize.fetcher import fetch_channel_videos
     from yt_summarize.pipeline import process_batch, generate_and_write_combined
     from yt_summarize import history as history_module
@@ -61,9 +61,8 @@ def _run_channel(job_id: str, url: str, max_results: int, output_dir: str, cache
         q.put(json.dumps(event))
 
     try:
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
         if not api_key:
-            raise RuntimeError("ANTHROPIC_API_KEY is not set")
+            raise RuntimeError("No Anthropic API key provided")
 
         emit({"type": "log", "message": f"Fetching videos from {url}…"})
         videos = fetch_channel_videos(url, max_results)
@@ -81,8 +80,8 @@ def _run_channel(job_id: str, url: str, max_results: int, output_dir: str, cache
         output_path.mkdir(parents=True, exist_ok=True)
         cache_path.mkdir(parents=True, exist_ok=True)
 
-        processed, stats = process_batch(videos, output_path, cache_path, workers=workers, on_event=emit)
-        generate_and_write_combined(processed, output_path, on_event=emit)
+        processed, stats = process_batch(videos, output_path, cache_path, workers=workers, on_event=emit, api_key=api_key)
+        generate_and_write_combined(processed, output_path, on_event=emit, api_key=api_key)
 
         history_module.append_run(
             cache_path,
@@ -104,7 +103,7 @@ def _run_channel(job_id: str, url: str, max_results: int, output_dir: str, cache
         _finish_job(job_id, error=str(exc))
 
 
-def _run_search(job_id: str, query: str, max_results: int, output_dir: str, cache_dir: str, workers: int) -> None:
+def _run_search(job_id: str, query: str, max_results: int, output_dir: str, cache_dir: str, workers: int, api_key: str = "") -> None:
     from yt_summarize.fetcher import search_videos
     from yt_summarize.pipeline import process_batch, generate_and_write_combined
     from yt_summarize import history as history_module
@@ -115,9 +114,8 @@ def _run_search(job_id: str, query: str, max_results: int, output_dir: str, cach
         q.put(json.dumps(event))
 
     try:
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
         if not api_key:
-            raise RuntimeError("ANTHROPIC_API_KEY is not set")
+            raise RuntimeError("No Anthropic API key provided")
 
         emit({"type": "log", "message": f'Searching YouTube for "{query}"…'})
         videos = search_videos(query, max_results)
@@ -129,8 +127,8 @@ def _run_search(job_id: str, query: str, max_results: int, output_dir: str, cach
         output_path.mkdir(parents=True, exist_ok=True)
         cache_path.mkdir(parents=True, exist_ok=True)
 
-        processed, stats = process_batch(videos, output_path, cache_path, workers=workers, on_event=emit)
-        generate_and_write_combined(processed, output_path, on_event=emit)
+        processed, stats = process_batch(videos, output_path, cache_path, workers=workers, on_event=emit, api_key=api_key)
+        generate_and_write_combined(processed, output_path, on_event=emit, api_key=api_key)
 
         history_module.append_run(
             cache_path,
@@ -163,6 +161,7 @@ class ChannelRequest(BaseModel):
     cache_dir: str = str(DEFAULT_CACHE)
     workers: int = 5
     since: str | None = None
+    api_key: str = ""
 
 
 class SearchRequest(BaseModel):
@@ -171,6 +170,7 @@ class SearchRequest(BaseModel):
     output_dir: str = str(DEFAULT_OUTPUT)
     cache_dir: str = str(DEFAULT_CACHE)
     workers: int = 5
+    api_key: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +182,7 @@ def start_channel(req: ChannelRequest) -> dict:
     job_id, _ = _make_job()
     threading.Thread(
         target=_run_channel,
-        args=(job_id, req.url, req.max_results, req.output_dir, req.cache_dir, req.workers, req.since),
+        args=(job_id, req.url, req.max_results, req.output_dir, req.cache_dir, req.workers, req.since, req.api_key),
         daemon=True,
     ).start()
     return {"job_id": job_id}
@@ -193,7 +193,7 @@ def start_search(req: SearchRequest) -> dict:
     job_id, _ = _make_job()
     threading.Thread(
         target=_run_search,
-        args=(job_id, req.query, req.max_results, req.output_dir, req.cache_dir, req.workers),
+        args=(job_id, req.query, req.max_results, req.output_dir, req.cache_dir, req.workers, req.api_key),
         daemon=True,
     ).start()
     return {"job_id": job_id}
@@ -262,8 +262,7 @@ def get_output_file(filename: str, output_dir: str = str(DEFAULT_OUTPUT)) -> dic
 
 @app.get("/api/status")
 def status() -> dict:
-    has_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
-    return {"api_key_set": has_key}
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
